@@ -46,7 +46,7 @@ export function useUserInitialization() {
 
       try {
         console.log('Initializing user in database...', user.id)
-        
+
         // Call the user API to get or create user
         const response = await fetch('/api/user', {
           method: 'GET',
@@ -56,11 +56,34 @@ export function useUserInitialization() {
         })
 
         if (!response.ok) {
-          throw new Error(`Failed to initialize user: ${response.statusText}`)
+          // Get more detailed error information
+          let errorMessage = `Failed to initialize user: ${response.statusText}`
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorMessage
+          } catch {
+            // If we can't parse the error response, use the status text
+          }
+
+          console.error('User initialization failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            url: response.url
+          })
+
+          // For deployment, we'll be more lenient with user initialization
+          if (response.status === 500) {
+            console.warn('Database connection may be unavailable, continuing without user data')
+            setUserData(null)
+            setError(null) // Don't show error to user for database issues
+            return
+          }
+
+          throw new Error(errorMessage)
         }
 
         const result = await response.json()
-        
+
         if (result.success) {
           setUserData(result.data)
           console.log('User initialized successfully:', result.data.email)
@@ -70,7 +93,24 @@ export function useUserInitialization() {
 
       } catch (err) {
         console.error('Error initializing user:', err)
-        setError(err instanceof Error ? err.message : 'Unknown error')
+
+        // For deployment, be more lenient with errors
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+
+        if (errorMessage.includes('Unauthorized') || errorMessage.includes('401')) {
+          // Authentication issue - this is expected in some cases
+          console.log('User not authenticated, continuing without user data')
+          setUserData(null)
+          setError(null)
+        } else if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
+          // Server error - likely database connection issue
+          console.warn('Server error during user initialization, continuing without user data')
+          setUserData(null)
+          setError(null)
+        } else {
+          // Other errors - show to user
+          setError(errorMessage)
+        }
       } finally {
         setIsInitializing(false)
       }
