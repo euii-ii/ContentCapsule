@@ -10,6 +10,15 @@ export async function POST(request: NextRequest) {
     const { url, type } = await request.json()
     console.log('Enhanced API - Received request:', { url, type })
 
+    // Get user authentication status early
+    let userId: string | null = null
+    try {
+      const authResult = await auth()
+      userId = authResult.userId
+    } catch (authError) {
+      console.log('Enhanced API - No authentication available')
+    }
+
     if (!url) {
       return NextResponse.json({ error: 'YouTube URL is required' }, { status: 400 })
     }
@@ -179,7 +188,6 @@ ${transcript.substring(0, 8000)}`
 
     // Save to history if user is authenticated
     try {
-      const { userId } = await auth()
       if (userId) {
         console.log('Enhanced API - Saving to history for user:', userId)
 
